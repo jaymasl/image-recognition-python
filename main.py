@@ -1,5 +1,6 @@
 import ollama
 from collections import Counter
+from tabulate import tabulate
 
 def get_keywords(image_path, iterations=35):
     # Initialize an empty list to store the replies
@@ -32,8 +33,9 @@ def get_keywords(image_path, iterations=35):
     # Count the occurrences of each word
     word_counts = Counter(all_words)
 
-    # Get the top 10 most common single words
+    # Get the top 10 most common single words and sort by count
     top_words = word_counts.most_common(10)
+    top_words.sort(key=lambda x: x[1], reverse=True)  # Sort by count in descending order
 
     return top_words
 
@@ -61,7 +63,10 @@ def aggregate_keywords(top_words):
         if not found:
             aggregated_counts[word] = count
 
-    return aggregated_counts
+    # Sort aggregated counts by count in descending order
+    sorted_aggregated_counts = sorted(aggregated_counts.items(), key=lambda x: x[1], reverse=True)
+
+    return sorted_aggregated_counts
 
 # Get keywords for image1 only
 top_words_image1 = get_keywords('./image1.jpg')
@@ -70,11 +75,14 @@ top_words_image1 = get_keywords('./image1.jpg')
 aggregated_counts_image1 = aggregate_keywords(top_words_image1)
 
 # Create guess sentence using the aggregated keywords
-guess_sentence_image1 = f"Image 1 likely depicts: {', '.join(aggregated_counts_image1.keys())}."
+guess_sentence_image1 = f"Image 1 likely depicts: {', '.join(word for word, _ in aggregated_counts_image1)}."
 
 # Print the guess sentence
 print(guess_sentence_image1)
 
-# Print the counts of each keyword in a single line for image1
-print("\nKeyword counts for Image 1: ", end="")
-print(", ".join(f"{word}: {count} times" for word, count in aggregated_counts_image1.items()))
+# Prepare data for table display
+table_data = aggregated_counts_image1
+
+# Print the counts of each keyword in a formatted table for image1
+print("\nKeyword counts for Image 1:")
+print(tabulate(table_data, headers=["Keyword", "Count"], tablefmt="pretty"))
