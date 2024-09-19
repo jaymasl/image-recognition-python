@@ -3,7 +3,7 @@ from collections import Counter
 from tabulate import tabulate
 from tqdm import tqdm  # Import tqdm for progress bar
 
-ITERATIONS = 40
+ITERATIONS = 30
 
 def extract_keywords_from_image(image_path, iterations=ITERATIONS):
     """
