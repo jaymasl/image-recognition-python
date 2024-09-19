@@ -1,88 +1,107 @@
 import ollama
 from collections import Counter
 from tabulate import tabulate
+from tqdm import tqdm  # Import tqdm for progress bar
 
-def get_keywords(image_path, iterations=35):
-    # Initialize an empty list to store the replies
+ITERATIONS = 40
+
+def extract_keywords_from_image(image_path, iterations=ITERATIONS):
+    """
+    Extracts keywords from an image using a chat model.
+
+    Args:
+        image_path (str): The path to the image file.
+        iterations (int): The number of times to query the model.
+
+    Returns:
+        list: A list of the top 15 keywords and their counts.
+    """
     replies = []
 
-    # Run the chat request for the specified number of iterations
-    for _ in range(iterations):
-        res = ollama.chat(
-            model='llava:13b',
-            messages=[
-                {'role': 'user',
-                'content': '''Only give a concise short list of single keywords.
-                Separated by commas, give words that visibly describe this image. 
-                Accurate visible descriptive elements.
-                Give important identification information.
-                Do not write a sentence.''',
-                'images': [image_path]}
-            ]
-        )
-        
-        # Append the reply to the list
-        replies.append(res['message']['content'])
+    for _ in tqdm(range(iterations), desc="Extracting keywords", unit="iteration"):
+        try:
+            response = ollama.chat(
+                model='llava:13b',
+                messages=[
+                    {
+                        'role': 'user',
+                        'content': (
+                            """Give a list of single keywords separated by commas.
+                            Give words that visibly describe this image.
+                            Accurate contextual visible descriptive elements.
+                            Give important identification information.
+                            Do not write a sentence."""
+                        ),
+                        'images': [image_path]
+                    }
+                ]
+            )
+            replies.append(response['message']['content'])
+        except Exception as e:
+            print(f"Error during chat request: {e}")
+            return []
 
-    # Combine all replies into a single string and split into words
     all_words = ', '.join(replies).split(', ')
+    word_counts = Counter(word.strip().lower() for word in all_words)
 
-    # Convert all words to lowercase for case-insensitive counting
-    all_words = [word.strip().lower() for word in all_words]
+    return word_counts.most_common(10)
 
-    # Count the occurrences of each word
-    word_counts = Counter(all_words)
+def aggregate_keyword_counts(top_words):
+    """
+    Aggregates keyword counts based on substring matches.
 
-    # Get the top 10 most common single words and sort by count
-    top_words = word_counts.most_common(10)
-    top_words.sort(key=lambda x: x[1], reverse=True)  # Sort by count in descending order
+    Args:
+        top_words (list): A list of tuples containing keywords and their counts.
 
-    return top_words
-
-def aggregate_keywords(top_words):
-    # Create a dictionary to hold aggregated counts
+    Returns:
+        list: A sorted list of aggregated keyword counts.
+    """
     aggregated_counts = {}
 
     for word, count in top_words:
-        # Check if the word is a substring of any existing key
-        found = False
+        # Check for existing keywords to aggregate counts
+        to_remove = []
         for existing_word in list(aggregated_counts.keys()):
-            if word in existing_word:
-                # If the current word is a substring of an existing word, add its count
+            if word in existing_word:  # If the new word is a substring of an existing word
                 aggregated_counts[existing_word] += count
-                found = True
                 break
-            elif existing_word in word:
-                # If the existing word is a substring of the current word, add its count
-                aggregated_counts[word] = aggregated_counts.get(word, 0) + aggregated_counts[existing_word]
-                del aggregated_counts[existing_word]
-                found = True
+            elif existing_word in word:  # If the existing word is a substring of the new word
+                aggregated_counts[word] = aggregated_counts.get(word, 0) + aggregated_counts[existing_word] + count
+                to_remove.append(existing_word)
                 break
-        
-        # If not found, add the word to the aggregated counts
-        if not found:
+        else:
+            # If no match was found, add the new word
             aggregated_counts[word] = count
+        
+        # Remove any keywords that are now redundant
+        for existing_word in to_remove:
+            del aggregated_counts[existing_word]
 
-    # Sort aggregated counts by count in descending order
-    sorted_aggregated_counts = sorted(aggregated_counts.items(), key=lambda x: x[1], reverse=True)
+    return sorted(aggregated_counts.items(), key=lambda x: x[1], reverse=True)
 
-    return sorted_aggregated_counts
+def main(image_path):
+    """
+    Main function to extract and aggregate keywords from an image.
 
-# Get keywords for image1 only
-top_words_image1 = get_keywords('./image1.jpg')
+    Args:
+        image_path (str): The path to the image file.
+    """
+    # Get keywords for the specified image
+    top_words = extract_keywords_from_image(image_path)
 
-# Aggregate keywords based on substring matches
-aggregated_counts_image1 = aggregate_keywords(top_words_image1)
+    # Aggregate keywords based on substring matches
+    aggregated_counts = aggregate_keyword_counts(top_words)
 
-# Create guess sentence using the aggregated keywords
-guess_sentence_image1 = f"Image 1 likely depicts: {', '.join(word for word, _ in aggregated_counts_image1)}."
+    # Create guess sentence using the aggregated keywords
+    if aggregated_counts:
+        guess_sentence = f"Image likely depicts: {', '.join(word for word, _ in aggregated_counts[:-1])}, and {aggregated_counts[-1][0]}."
+        print(guess_sentence)
 
-# Print the guess sentence
-print(guess_sentence_image1)
+        # Print the counts of each keyword in a formatted table
+        print("\nKeyword counts:")
+        print(tabulate(aggregated_counts, headers=["Keyword", "Count"], tablefmt="pretty"))
+    else:
+        print("No keywords extracted.")
 
-# Prepare data for table display
-table_data = aggregated_counts_image1
-
-# Print the counts of each keyword in a formatted table for image1
-print("\nKeyword counts for Image 1:")
-print(tabulate(table_data, headers=["Keyword", "Count"], tablefmt="pretty"))
+if __name__ == "__main__":
+    main('./image1.jpg')
