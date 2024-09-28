@@ -5,7 +5,7 @@ from tqdm import tqdm
 import argparse
 
 ITERATIONS_COUNT = 30
-TOP_KEYWORDS_COUNT = 15
+TOP_KEYWORDS_COUNT = 10
 
 def extract_keywords_from_image(image_path: str, iterations: int = ITERATIONS_COUNT) -> list:
     """
@@ -28,10 +28,10 @@ def extract_keywords_from_image(image_path: str, iterations: int = ITERATIONS_CO
                     {
                         'role': 'user',
                         'content': (
-                            "List of single keywords separated by commas. "
-                            "Individual terms that visibly describe this image. "
-                            "Accurate contextual visible descriptive elements. "
-                            "Important identification information. "
+                            "List at least fifteen (15) keywords separated by commas."
+                            "Terms that visibly describe this image."
+                            "Visible descriptive elements."
+                            "Important identification information."
                             "Do not write a sentence."
                         ),
                         'images': [image_path]
